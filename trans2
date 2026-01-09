@@ -1,0 +1,355 @@
+import speech_recognition as sr
+from googletrans import Translator
+from gtts import gTTS
+import tempfile
+import os
+from playsound import playsound
+from pynput import keyboard
+import threading
+import io
+import sys
+
+class PushToTalkTranslator:
+    def __init__(self, source_lang='auto', target_lang='hi', push_key=keyboard.Key.space):
+        self.source_lang = source_lang
+        self.target_lang = target_lang
+        self.push_key = push_key
+        self.is_recording = False
+        self.recognizer = sr.Recognizer()
+        self.translator = Translator()
+        self.microphone = None
+        self.audio_data = None
+        self.should_exit = False
+        
+        # Language names mapping
+        self.language_names = {
+            'auto': 'Auto-detect',
+            'en': 'English',
+            'hi': 'Hindi (हिंदी)',
+            'es': 'Spanish (Español)',
+            'fr': 'French (Français)',
+            'de': 'German (Deutsch)',
+            'ml': 'Malayalam (മലയാളം)',
+            'ja': 'Japanese (日本語)',
+            'zh-cn': 'Chinese (中文)',
+            'ar': 'Arabic (العربية)',
+            'pt': 'Portuguese (Português)',
+            'ru': 'Russian (Русский)',
+            'it': 'Italian (Italiano)',
+            'ta': 'Tamil (தமிழ்)',
+            'te': 'Telugu (తెలుగు)',
+            'bn': 'Bengali (বাংলা)',
+            'ko': 'Korean (한국어)'
+        }
+        
+        print("=" * 70)
+        print("🎤 Push-to-Talk Translator (With Source Language Specification)")
+        print("=" * 70)
+        print(f"🗣️  Source Language (Input): {self.language_names.get(source_lang, source_lang)}")
+        print(f"🎯 Target Language (Output): {self.language_names.get(target_lang, target_lang)}")
+        print(f"⌨️  Push-to-Talk Key: {self.push_key}")
+        print("\n📖 Instructions:")
+        print("   1. PRESS and HOLD the Space bar to start recording")
+        print("   2. Speak in your source language")
+        print("   3. RELEASE the Space bar to stop and translate")
+        print("   4. Press 'ESC' to quit")
+        print("=" * 70)
+        print()
+        
+    def on_press(self, key):
+        """Called when a key is pressed"""
+        try:
+            if key == self.push_key and not self.is_recording:
+                self.is_recording = True
+                source_name = self.language_names.get(self.source_lang, self.source_lang)
+                print(f"\n🔴 RECORDING... (Speaking in {source_name})")
+                # Start recording in a separate thread
+                recording_thread = threading.Thread(target=self.record_audio_continuous)
+                recording_thread.daemon = True
+                recording_thread.start()
+        except AttributeError:
+            pass
+    
+    def on_release(self, key):
+        """Called when a key is released"""
+        try:
+            # Check if ESC key to quit
+            if key == keyboard.Key.esc:
+                print("\n" + "=" * 70)
+                print("👋 Exiting... Thank you for using Push-to-Talk Translator!")
+                print("=" * 70)
+                self.should_exit = True
+                return False  # Stop listener
+            
+            # Check if push-to-talk key released
+            if key == self.push_key and self.is_recording:
+                print("⏸️  Recording stopped. Processing...")
+                self.is_recording = False
+                
+                # Give a moment for recording thread to finish capturing
+                threading.Timer(0.5, self.process_audio).start()
+                    
+        except AttributeError:
+            pass
+    
+    def record_audio_continuous(self):
+        """Record audio continuously while key is held"""
+        try:
+            with sr.Microphone() as source:
+                # Adjust for ambient noise quickly
+                self.recognizer.adjust_for_ambient_noise(source, duration=0.3)
+                
+                # Record continuously with phrase time limit removed
+                # This allows for long sentences
+                self.recognizer.phrase_threshold = 0.1  # Less strict silence detection
+                self.recognizer.pause_threshold = 1.0   # Allow 1 second pauses
+                self.recognizer.non_speaking_duration = 0.3  # Reduce sensitivity
+                
+                # Listen for as long as key is held (max 60 seconds)
+                source_name = self.language_names.get(self.source_lang, self.source_lang)
+                print(f"🎙️  Listening in {source_name}... (Hold Space bar to continue speaking)")
+                self.audio_data = self.recognizer.listen(
+                    source, 
+                    timeout=None,      # No initial timeout
+                    phrase_time_limit=60  # Maximum 60 seconds
+                )
+                
+        except Exception as e:
+            if self.is_recording:  # Only show error if still recording
+                print(f"❌ Recording error: {e}")
+            self.audio_data = None
+    
+    def process_audio(self):
+        """Transcribe, translate, and speak the audio"""
+        if self.should_exit:
+            return
+            
+        if not self.audio_data:
+            print("❌ No audio recorded\n")
+            print("💡 Press and hold Space bar again to record...")
+            return
+        
+        try:
+            # Transcribe audio with source language hint
+            print("🔎 Transcribing...")
+            
+            # If source language is auto, Google will detect
+            # If specific language, we use it as hint
+            if self.source_lang == 'auto':
+                text = self.recognizer.recognize_google(self.audio_data)
+            else:
+                # Use language hint for better recognition
+                # Note: Google Speech API uses different language codes
+                text = self.recognizer.recognize_google(self.audio_data, language=self.source_lang)
+            
+            # Show transcription with word count
+            word_count = len(text.split())
+            print(f"✅ Recognized ({word_count} words): '{text}'")
+            
+            # Detect actual source language
+            detected = self.translator.detect(text)
+            detected_lang = detected.lang
+            detected_name = self.language_names.get(detected_lang, detected_lang)
+            print(f"🌍 Detected language: {detected_name} ({detected_lang})")
+            
+            # Show if detected differs from specified
+            if self.source_lang != 'auto' and detected_lang != self.source_lang:
+                print(f"⚠️  Note: Detected language differs from specified ({self.language_names.get(self.source_lang, self.source_lang)})")
+            
+            # Translate
+            target_name = self.language_names.get(self.target_lang, self.target_lang)
+            
+            if detected_lang == self.target_lang:
+                print(f"ℹ️  Already in target language ({target_name})")
+                translated_text = text
+            else:
+                print(f"🔄 Translating from {detected_name} to {target_name}...")
+                translation = self.translator.translate(text, src=detected_lang, dest=self.target_lang)
+                translated_text = translation.text
+                print(f"✅ Translated ({len(translated_text.split())} words): '{translated_text}'")
+            
+            # Display results
+            print("\n" + "=" * 70)
+            print("📝 TRANSLATION RESULT:")
+            print("=" * 70)
+            print(f"Source Language (Detected): {detected_name}")
+            print(f"Target Language: {target_name}")
+            print("-" * 70)
+            print(f"Original ({detected_lang}):\n  {text}\n")
+            print(f"Translated ({self.target_lang}):\n  {translated_text}")
+            print("=" * 70)
+            
+            # Text-to-speech
+            print("\n🔊 Playing translated audio in {0}...".format(target_name))
+            tts = gTTS(translated_text, lang=self.target_lang, slow=False)
+            temp_file = tempfile.mktemp(suffix='.mp3')
+            tts.save(temp_file)
+            playsound(temp_file)
+            os.remove(temp_file)
+            
+            print("\n✅ Done!")
+            print("💡 Press and hold Space bar again to record...")
+            print("💡 Press ESC to exit\n")
+            
+        except sr.UnknownValueError:
+            print("❌ Could not understand audio (try speaking more clearly)\n")
+            print("💡 Press and hold Space bar again to record...")
+            print("💡 Press ESC to exit\n")
+        except sr.RequestError as e:
+            print(f"❌ Speech recognition service error: {e}\n")
+            print("💡 Check your internet connection...")
+            print("💡 Press ESC to exit\n")
+        except Exception as e:
+            print(f"❌ Error: {e}\n")
+            print("💡 Press and hold Space bar again to record...")
+            print("💡 Press ESC to exit\n")
+        
+        finally:
+            # Clear audio data for next recording
+            self.audio_data = None
+    
+    def run(self):
+        """Start the push-to-talk listener"""
+        source_name = self.language_names.get(self.source_lang, self.source_lang)
+        target_name = self.language_names.get(self.target_lang, self.target_lang)
+        
+        print(f"✅ Ready!")
+        print(f"   Speaking in: {source_name}")
+        print(f"   Translating to: {target_name}")
+        print(f"\nPress and hold Space bar to start recording...")
+        print("💡 Press ESC to exit\n")
+        
+        # Start keyboard listener
+        try:
+            with keyboard.Listener(
+                on_press=self.on_press,
+                on_release=self.on_release
+            ) as listener:
+                listener.join()
+        except KeyboardInterrupt:
+            print("\n" + "=" * 70)
+            print("👋 Program interrupted. Exiting...")
+            print("=" * 70)
+
+
+def main():
+    """Main function"""
+    print("\n" + "=" * 70)
+    print("🎤 PUSH-TO-TALK TRANSLATOR")
+    print("=" * 70)
+    print("\n🌍 Available language codes:")
+    print("   auto   = Auto-detect")
+    print("   en = English       | hi = Hindi         | es = Spanish")
+    print("   fr = French        | de = German        | ml = Malayalam")
+    print("   ja = Japanese      | zh-cn = Chinese    | ar = Arabic")
+    print("   pt = Portuguese    | ru = Russian       | it = Italian")
+    print("   ta = Tamil         | te = Telugu        | bn = Bengali")
+    print("   ko = Korean\n")
+    
+    while True:
+        try:
+            # Get source language
+            print("-" * 70)
+            source_lang = input("Enter SOURCE language code (what you'll speak in) [default: auto]: ").strip().lower() or 'auto'
+            
+            if source_lang == 'help':
+                show_language_help()
+                continue
+            
+            # Validate source language
+            valid_langs = ['auto', 'en', 'hi', 'es', 'fr', 'de', 'ml', 'ja', 'zh-cn', 'ar', 'pt', 'ru', 'it', 'ta', 'te', 'bn', 'ko']
+            if source_lang not in valid_langs:
+                print(f"❌ Invalid language code: {source_lang}")
+                print("Type 'help' to see available languages\n")
+                continue
+            
+            # Get target language
+            target_lang = input("Enter TARGET language code (what to translate to) [default: hi]: ").strip().lower() or 'hi'
+            
+            if target_lang == 'help':
+                show_language_help()
+                continue
+            
+            # Validate target language
+            valid_target_langs = ['en', 'hi', 'es', 'fr', 'de', 'ml', 'ja', 'zh-cn', 'ar', 'pt', 'ru', 'it', 'ta', 'te', 'bn', 'ko']
+            if target_lang not in valid_target_langs:
+                print(f"❌ Invalid language code: {target_lang}")
+                print("Type 'help' to see available languages\n")
+                continue
+            
+            break
+            
+        except KeyboardInterrupt:
+            print("\n" + "=" * 70)
+            print("👋 Program interrupted. Exiting...")
+            print("=" * 70)
+            sys.exit(0)
+    
+    print(f"\n⌨️  Use custom key? (Press Enter for Space bar): ", end='')
+    custom_key = input().strip().lower()
+    
+    if custom_key:
+        # Map common keys
+        key_map = {
+            'ctrl': keyboard.Key.ctrl,
+            'shift': keyboard.Key.shift,
+            'alt': keyboard.Key.alt,
+            'tab': keyboard.Key.tab,
+            'enter': keyboard.Key.enter,
+            'space': keyboard.Key.space,
+        }
+        push_key = key_map.get(custom_key, keyboard.Key.space)
+        print(f"✅ Using key: {custom_key}")
+    else:
+        push_key = keyboard.Key.space
+        print("✅ Using key: Space bar")
+    
+    print("\n" + "=" * 70)
+    print(f"🚀 Starting Push-to-Talk Translator")
+    print(f"   Source Language (you speak): {source_lang}")
+    print(f"   Target Language (translate to): {target_lang}")
+    print(f"   Push-to-Talk Key: {custom_key or 'Space bar'}")
+    print("=" * 70 + "\n")
+    
+    # Create and run translator
+    translator = PushToTalkTranslator(source_lang=source_lang, target_lang=target_lang, push_key=push_key)
+    translator.run()
+
+
+def show_language_help():
+    """Display language help"""
+    print("\n" + "=" * 70)
+    print("🌍 Available Languages:")
+    print("=" * 70)
+    languages = {
+        'auto': 'Auto-detect (system will detect language)',
+        'en': 'English',
+        'hi': 'Hindi (हिंदी)',
+        'es': 'Spanish (Español)',
+        'fr': 'French (Français)',
+        'de': 'German (Deutsch)',
+        'ml': 'Malayalam (മലയാളം)',
+        'ja': 'Japanese (日本語)',
+        'zh-cn': 'Chinese (中文)',
+        'ar': 'Arabic (العربية)',
+        'pt': 'Portuguese (Português)',
+        'ru': 'Russian (Русский)',
+        'it': 'Italian (Italiano)',
+        'ta': 'Tamil (தமிழ்)',
+        'te': 'Telugu (తెలుగు)',
+        'bn': 'Bengali (বাংলা)',
+        'ko': 'Korean (한국어)'
+    }
+    for code, name in languages.items():
+        print(f"  {code:8} = {name}")
+    print("=" * 70 + "\n")
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n" + "=" * 70)
+        print("👋 Thank you for using Push-to-Talk Translator!")
+        print("=" * 70)
+        sys.exit(0)

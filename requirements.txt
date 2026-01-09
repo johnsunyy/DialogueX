@@ -1,0 +1,17 @@
+Flask==3.0.0
+Flask-SocketIO==5.3.5
+Flask-CORS==4.0.0
+python-socketio==5.10.0
+eventlet==0.33.3
+
+# Audio processing
+pydub==0.25.1
+SpeechRecognition==3.10.1
+PyAudio==0.2.14
+
+# Translation
+googletrans==4.0.0rc1
+gTTS==2.5.0
+
+# Utilities
+python-dotenv==1.0.0
