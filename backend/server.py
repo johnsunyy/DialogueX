@@ -163,8 +163,8 @@ def handle_disable_translation(data):
 @socketio.on('audio_stream')
 def handle_audio_stream(data):
     """
-    Handle incoming audio stream for CLIENT-SIDE translation
-    Client sends audio they RECEIVED, backend translates to THEIR language
+    Handle incoming audio stream for SENDER-SIDE translation
+    Sender captures their own mic audio, backend broadcasts translations to all other users
     Data: {room: str, audio: str (base64)}
     """
     try:
@@ -173,49 +173,73 @@ def handle_audio_stream(data):
             logger.warning("Audio stream from unknown user")
             return
         
-        user_info = user_states[sender_sid]
-        
-        if not user_info['translation_enabled']:
-            logger.warning(f"Audio stream from user without translation enabled: {user_info['name']}")
-            return
+        sender_info = user_states[sender_sid]
+        room = sender_info['room']
+        sender_name = sender_info['name']
         
         base64_audio = data.get('audio')
         if not base64_audio:
             logger.warning("Empty audio data received")
             return
         
-        target_lang = user_info['language']
-        user_name = user_info['name']
+        logger.info(f"Received audio from sender '{sender_name}' in room '{room}'")
         
-        logger.info(f"Processing audio for '{user_name}' → {SUPPORTED_LANGUAGES.get(target_lang, target_lang)}")
-        
-        # Process audio in pipeline
+        # Process audio once
         try:
-            # Step 1: Convert base64 to AudioData
             audio_data = audio_handler.process_audio_chunk(base64_audio)
-            
-            # Step 2: Run translation pipeline (translate to THIS user's language)
-            result = translation_pipeline.process_audio(audio_data, target_lang, "Speaker")
-            
-            if result:
-                # Send translated audio BACK to the SAME client who sent it
-                emit('translated_audio', {
-                    'audio': result['audio'],
-                    'latency_ms': result['total_latency_ms'],
-                    'breakdown': result['breakdown'],
-                    'timestamp': datetime.now().isoformat()
-                })
-                
-                # Send subtitle back to client
-                emit('translated_subtitle', result['subtitle'])
-                
-                logger.info(f"✓ Translation sent to '{user_name}' (latency: {result['total_latency_ms']}ms)")
-            else:
-                logger.warning(f"Translation pipeline returned no result for '{user_name}'")
-                
         except Exception as e:
-            logger.error(f"Error in translation pipeline: {e}")
-            emit('error', {'message': f'Translation failed: {str(e)}'})
+            logger.error(f"Audio processing error: {e}")
+            return
+        
+        # Broadcast to all OTHER users in the same room
+        translation_count = 0
+        for receiver_sid, receiver_info in user_states.items():
+            # Skip sender (don't send translation back to speaker)
+            if receiver_sid == sender_sid:
+                continue
+            
+            # Skip users in different rooms
+            if receiver_info['room'] != room:
+                continue
+            
+            # Skip users without translation enabled
+            if not receiver_info['translation_enabled']:
+                logger.debug(f"Skipping {receiver_info['name']} - translation disabled")
+                continue
+            
+            target_lang = receiver_info['language']
+            receiver_name = receiver_info['name']
+            
+            logger.info(f"Translating {sender_name} → {receiver_name} ({SUPPORTED_LANGUAGES.get(target_lang, target_lang)})")
+            
+            # Translate to THIS receiver's language
+            try:
+                result = translation_pipeline.process_audio(audio_data, target_lang, sender_name)
+                
+                if result:
+                    # Send translation to THIS SPECIFIC receiver only
+                    emit('translated_audio', {
+                        'audio': result['audio'],
+                        'latency_ms': result['total_latency_ms'],
+                        'breakdown': result['breakdown'],
+                        'timestamp': datetime.now().isoformat(),
+                        'sender': sender_name
+                    }, room=receiver_sid)
+                    
+                    emit('translated_subtitle', result['subtitle'], room=receiver_sid)
+                    
+                    logger.info(f"✓ Sent translation to '{receiver_name}' (latency: {result['total_latency_ms']}ms)")
+                    translation_count += 1
+                else:
+                    logger.warning(f"Translation pipeline returned no result for '{receiver_name}'")
+                    
+            except Exception as e:
+                logger.error(f"Translation error for {receiver_name}: {e}")
+        
+        if translation_count > 0:
+            logger.info(f"✓ Broadcast complete: {translation_count} translation(s) sent")
+        else:
+            logger.debug(f"No translations sent (no eligible receivers in room '{room}')")
         
     except Exception as e:
         logger.error(f"Error in audio_stream handler: {e}")
