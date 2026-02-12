@@ -145,9 +145,8 @@ def handle_disable_translation(data):
     """
     try:
         if request.sid not in user_states:
-            emit('error', {'message': 'User not in a room'})
             return
-        
+            
         user_states[request.sid]['translation_enabled'] = False
         user_states[request.sid]['language'] = None
         
@@ -160,90 +159,91 @@ def handle_disable_translation(data):
         logger.error(f"Error in disable_translation: {e}")
         emit('error', {'message': f'Failed to disable translation: {str(e)}'})
 
-@socketio.on('audio_stream')
-def handle_audio_stream(data):
+@socketio.on('client_log')
+def handle_client_log(data):
     """
-    Handle incoming audio stream for SENDER-SIDE translation
-    Sender captures their own mic audio, backend broadcasts translations to all other users
-    Data: {room: str, audio: str (base64)}
+    Receive debug logs from frontend to help diagnose issues
+    Data: {level: str, message: str}
+    """
+    level = data.get('level', 'INFO')
+    message = data.get('message', '')
+    sid = request.sid
+    user = user_states.get(sid, {}).get('name', 'Unknown')
+    print(f"[CLIENT LOG - {user}] {level}: {message}")
+
+@socketio.on('translate_audio_chunk')
+def handle_translate_audio_chunk(data):
+    """
+    Handle incoming audio chunk from a RECEIVER for specific translation.
+    Receiver captures a remote user's audio and asks for translation to their own language.
+    Data: {
+        room: str,
+        source_uid: int/str,  # Who is speaking
+        audio: str (base64),
+        target_lang: str      # Language to translate TO
+    }
     """
     try:
-        sender_sid = request.sid
-        if sender_sid not in user_states:
-            logger.warning("Audio stream from unknown user")
+        requester_sid = request.sid
+        if requester_sid not in user_states:
             return
-        
-        sender_info = user_states[sender_sid]
-        room = sender_info['room']
-        sender_name = sender_info['name']
-        
+
+        source_uid = data.get('source_uid')
+        target_lang = data.get('target_lang')
         base64_audio = data.get('audio')
-        if not base64_audio:
-            logger.warning("Empty audio data received")
+        room = user_states[requester_sid]['room']
+
+        if not base64_audio or not target_lang:
             return
+
+        # Identify Source Name
+        # We find the name of the user with source_uid in the same room
+        source_name = f"User {source_uid}"
         
-        logger.info(f"Received audio from sender '{sender_name}' in room '{room}'")
-        
-        # Process audio once
+        # Optimize: In a real app, use a dict for ID lookups. Here we iterate (N is small).
+        for sid, info in user_states.items():
+            # Check if in same room and ID matches
+            # Note: user_id might be int or str, safest to compare as str
+            if info['room'] == room and str(info.get('user_id')) == str(source_uid):
+                source_name = info['name']
+                break
+
+        # Process Audio (Decode Base64)
         try:
             audio_data = audio_handler.process_audio_chunk(base64_audio)
         except Exception as e:
             logger.error(f"Audio processing error: {e}")
             return
         
-        # Broadcast to all OTHER users in the same room
-        translation_count = 0
-        for receiver_sid, receiver_info in user_states.items():
-            # Skip sender (don't send translation back to speaker)
-            if receiver_sid == sender_sid:
-                continue
+        # Translate
+        # Note: pipeline.process_audio detects source language automatically from audio
+        # It needs 'source_name' just for logging/subtitle attribution
+        try:
+            result = translation_pipeline.process_audio(audio_data, target_lang, source_name)
             
-            # Skip users in different rooms
-            if receiver_info['room'] != room:
-                continue
-            
-            # Skip users without translation enabled
-            if not receiver_info['translation_enabled']:
-                logger.debug(f"Skipping {receiver_info['name']} - translation disabled")
-                continue
-            
-            target_lang = receiver_info['language']
-            receiver_name = receiver_info['name']
-            
-            logger.info(f"Translating {sender_name} → {receiver_name} ({SUPPORTED_LANGUAGES.get(target_lang, target_lang)})")
-            
-            # Translate to THIS receiver's language
-            try:
-                result = translation_pipeline.process_audio(audio_data, target_lang, sender_name)
+            if result:
+                # UNICAST response to Requester (only they hear this translation)
+                emit('translated_audio', {
+                    'audio': result['audio'],
+                    'latency_ms': result['total_latency_ms'],
+                    'breakdown': result['breakdown'],
+                    'timestamp': datetime.now().isoformat(),
+                    'sender': source_name,
+                    'target_lang': target_lang
+                }, room=requester_sid)
                 
-                if result:
-                    # Send translation to THIS SPECIFIC receiver only
-                    emit('translated_audio', {
-                        'audio': result['audio'],
-                        'latency_ms': result['total_latency_ms'],
-                        'breakdown': result['breakdown'],
-                        'timestamp': datetime.now().isoformat(),
-                        'sender': sender_name
-                    }, room=receiver_sid)
-                    
-                    emit('translated_subtitle', result['subtitle'], room=receiver_sid)
-                    
-                    logger.info(f"✓ Sent translation to '{receiver_name}' (latency: {result['total_latency_ms']}ms)")
-                    translation_count += 1
-                else:
-                    logger.warning(f"Translation pipeline returned no result for '{receiver_name}'")
-                    
-            except Exception as e:
-                logger.error(f"Translation error for {receiver_name}: {e}")
-        
-        if translation_count > 0:
-            logger.info(f"✓ Broadcast complete: {translation_count} translation(s) sent")
-        else:
-            logger.debug(f"No translations sent (no eligible receivers in room '{room}')")
-        
+                emit('translated_subtitle', result['subtitle'], room=requester_sid)
+                
+                logger.info(f"✓ Translated {source_name} -> {user_states[requester_sid]['name']} ({target_lang})")
+            else:
+                # Silence or no speech detected
+                pass
+                
+        except Exception as e:
+            logger.error(f"Translation pipeline error: {e}")
+            
     except Exception as e:
-        logger.error(f"Error in audio_stream handler: {e}")
-        emit('error', {'message': f'Audio processing failed: {str(e)}'})
+        logger.error(f"Error in translate_audio_chunk: {e}")
 
 # ==================== Flask Routes ====================
 

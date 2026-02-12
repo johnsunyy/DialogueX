@@ -962,7 +962,7 @@
         // ==================== CONFIGURATION ====================
         const APP_ID = "6cb29407d3d3421aac28956a43545efb";
         const TOKEN = null;
-        const BACKEND_URL = 'http://10.133.115.73:5000';
+        const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:5000`;
 
         // ==================== GLOBAL STATE ====================
         let currentView = 'landing'; // 'landing', 'dashboard', 'call'
@@ -992,6 +992,14 @@
         // Push-to-talk variables
         let pushToTalkActive = false;
         let spacebarPressed = false;
+
+        // ==================== LOGGING ====================
+        function logToServer(level, message) {
+            console.log(`[${level}] ${message}`);
+            if (socket && socket.connected) {
+                socket.emit('client_log', { level: level, message: message });
+            }
+        }
 
         // ==================== NAVIGATION ====================
         function showView(viewName) {
@@ -1077,11 +1085,11 @@
             });
 
             socket.on('connect', () => {
-                console.log("Connected to translation backend");
+                logToServer('INFO', "Connected to translation backend");
             });
 
             socket.on('disconnect', () => {
-                console.log("Disconnected from translation backend");
+                logToServer('WARN', "Disconnected from translation backend");
             });
 
             socket.on('connection_response', (data) => {
@@ -1132,7 +1140,7 @@
             });
 
             socket.on('error', (error) => {
-                console.error("Socket error:", error);
+                logToServer('ERROR', "Socket error: " + JSON.stringify(error));
                 showNotification(error.message || "Connection error", true);
             });
         }
@@ -1215,7 +1223,13 @@
                     });
                 }
 
-                // No need to start recording - sender automatically records when in call
+                // Mute raw audio from all remote users (hear only translation)
+                Object.values(remoteUsers).forEach(user => {
+                    if (user.audioTrack) user.audioTrack.stop();
+                    // Ensure capture is running
+                    setupReceiverTranslationCapture(user);
+                });
+
                 showNotification(`Translation enabled to ${translationLanguageSelect.options[translationLanguageSelect.selectedIndex].text}`);
             });
 
@@ -1234,8 +1248,12 @@
                     });
                 }
 
-                // Sender recording continues - just won't receive translations
-                showNotification("Translation disabled");
+                // Unmute raw audio from all remote users (hear natural voice)
+                Object.values(remoteUsers).forEach(user => {
+                    if (user.audioTrack) user.audioTrack.play();
+                });
+
+                showNotification("Translation disabled - Raw audio active");
             });
 
             // Role selection
@@ -1258,244 +1276,212 @@
             });
         });
 
-        // ==================== SENDER-SIDE TRANSLATION RECORDING ====================
-        // Sender-side translation recording variables
-        let senderMediaRecorder = null;
-        let senderAudioContext = null;
-        let senderGainNode = null;
-        let senderCompressorNode = null;
-        let senderAudioChunks = [];
-        let isSenderRecording = false;
+        // ==================== RECEIVER-SIDE TRANSLATION CAPTURE ====================
+        // Tracks active recorders for remote users: { uid: { recorder, chunks, stream } }
+        let receiverRecorders = {};
 
-        // Setup sender-side translation capture (captures from local mic for translation)
-        async function setupSenderTranslationCapture() {
+        // Setup receiver-side capture for a remote user
+        // This records the REMOTE audio track locally and sends it to backend for translation
+        // Global AudioContext (lazy init)
+        let audioContext;
+
+        function setupReceiverTranslationCapture(user) {
             try {
-                console.log('🎙️ Setting up sender translation capture...');
+                if (!user.audioTrack) return;
 
-                // Create second mic stream for translation recording
-                // (separate from Agora WebRTC track)
-                const translationStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        sampleRate: 48000,
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
-                });
+                // If already recording, skip
+                if (receiverRecorders[user.uid]) return;
 
-                console.log('✅ Translation mic stream created');
+                console.log(`🎙️ Setting up VAD receiver capture for user ${user.uid}...`);
+                logToServer('INFO', `Setting up VAD capture for User ${user.uid}`);
 
-                // Web Audio API processing chain
-                senderAudioContext = new AudioContext({ sampleRate: 48000 });
-                const source = senderAudioContext.createMediaStreamSource(translationStream);
+                // Create a MediaStream from the remote audio track
+                const mediaStream = new MediaStream();
+                mediaStream.addTrack(user.audioTrack.getMediaStreamTrack());
 
-                // Gain boost for clarity
-                senderGainNode = senderAudioContext.createGain();
-                senderGainNode.gain.value = 1.5; // 50% boost
+                // Setup Audio Analysis for VAD
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
 
-                // Dynamic compression for volume normalization
-                senderCompressorNode = senderAudioContext.createDynamicsCompressor();
-                senderCompressorNode.threshold.value = -30;
-                senderCompressorNode.knee.value = 10;
-                senderCompressorNode.ratio.value = 12;
-                senderCompressorNode.attack.value = 0.003;
-                senderCompressorNode.release.value = 0.25;
+                // Create source from the stream
+                // Note: We need to clone the track or ensure it doesn't affect playback
+                // Analyser node needs a source.
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 512;
+                source.connect(analyser);
 
-                // Connect processing chain
-                source.connect(senderGainNode);
-                senderGainNode.connect(senderCompressorNode);
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
 
-                const destination = senderAudioContext.createMediaStreamDestination();
-                senderCompressorNode.connect(destination);
-
-                console.log(`✅ Audio processing chain created (48kHz, gain: 1.5x, compression enabled)`);
-
-                // Create MediaRecorder for translation
-                senderMediaRecorder = new MediaRecorder(destination.stream, {
+                // Create MediaRecorder
+                const recorder = new MediaRecorder(mediaStream, {
                     mimeType: 'audio/webm;codecs=opus',
-                    audioBitsPerSecond: 128000
+                    audioBitsPerSecond: 48000
                 });
 
-                console.log('🎙️ Sender translation recorder ready');
+                receiverRecorders[user.uid] = {
+                    recorder: recorder,
+                    chunks: [],
+                    stream: mediaStream,
+                    isRecording: true,
+                    vadLoop: null // To store animation frame ID
+                };
 
-                // Start recording immediately (continuous automatic capture)
-                startSenderAudioRecording();
+                const recorderData = receiverRecorders[user.uid];
 
-            } catch (error) {
-                console.error('❌ Failed to setup sender translation capture:', error);
-                showNotification('Failed to setup translation audio capture', true);
-            }
-        }
+                // VAD State
+                let hasSpeechInChunk = false;
+                let silenceStartTime = null;
+                let chunkStartTime = Date.now();
+                let lastSpeakingTime = Date.now();
 
-        // Start sender-side audio recording for translation
-        function startSenderAudioRecording() {
-            if (!senderMediaRecorder || !currentRoom) {
-                console.log('⚠️ Cannot start sender recording - recorder not ready or no room');
-                return;
-            }
+                // Constants
+                const VOLUME_THRESHOLD = 15;      // Sensitivity (0-255)
+                const SILENCE_DURATION = 600;     // Wait 600ms of silence before sending
+                const MAX_SPEECH_DURATION = 8000; // Force send after 8s
+                const MAX_SILENCE_CHUNK = 3000;   // Reset silent chunks every 3s to save memory
 
-            if (isSenderRecording) {
-                console.log('Already recording from sender');
-                return;
-            }
+                function analyze() {
+                    // Check if recorder still exists
+                    if (!receiverRecorders[user.uid] || !receiverRecorders[user.uid].isRecording) return;
 
-            senderAudioChunks = [];
+                    analyser.getByteFrequencyData(dataArray);
 
-            senderMediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    senderAudioChunks.push(event.data);
+                    // Calc average volume
+                    let sum = 0;
+                    for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
+                    const average = sum / bufferLength;
+
+                    const now = Date.now();
+                    const chunkDuration = now - chunkStartTime;
+
+                    if (average > VOLUME_THRESHOLD) {
+                        // SPEECH DETECTED
+                        if (!hasSpeechInChunk) {
+                            // First speech in this chunk
+                            console.log(`🗣️ VAD: Speech start ${user.uid} (Vol: ${average.toFixed(1)})`);
+                            // logToServer('DEBUG', `Speech start ${user.uid}`);
+                        }
+                        hasSpeechInChunk = true;
+                        silenceStartTime = null;
+                        lastSpeakingTime = now;
+                    } else {
+                        // SILENCE
+                        if (hasSpeechInChunk) {
+                            if (!silenceStartTime) silenceStartTime = now;
+
+                            // Check if silence is long enough to send
+                            if (now - silenceStartTime > SILENCE_DURATION) {
+                                console.log(`🤫 VAD: End of speech detected (${now - silenceStartTime}ms silence) -> SENDING`);
+                                stopAndSend();
+                                return; // Loop restarts in onstop
+                            }
+                        }
+                    }
+
+                    // Safety Limits
+                    if (hasSpeechInChunk && chunkDuration > MAX_SPEECH_DURATION) {
+                        console.log("⏱️ VAD: Max speech duration -> SENDING");
+                        stopAndSend();
+                        return;
+                    }
+
+                    if (!hasSpeechInChunk && chunkDuration > MAX_SILENCE_CHUNK) {
+                        // Too much silence, just discard to free memory
+                        // console.log("🗑️ VAD: Discarding detection-free silent chunk");
+                        stopAndDiscard();
+                        return;
+                    }
+
+                    recorderData.vadLoop = requestAnimationFrame(analyze);
                 }
-            };
 
-            senderMediaRecorder.onstop = () => {
-                if (senderAudioChunks.length === 0 || !currentRoom) {
-                    senderAudioChunks = [];
-                    return;
+                function stopAndSend() {
+                    if (recorder.state === 'recording') recorder.stop();
+                    // onstop will handle sending because hasSpeechInChunk is true (stored in recorderData?)
+                    // Actually onstop logic needs to know if we should send.
+                    // We can use a property on recorderData
+                    recorderData.shouldSend = true;
                 }
 
-                const audioBlob = new Blob(senderAudioChunks, { type: 'audio/webm' });
-                console.log(`📦 Sender audio chunk: ${(audioBlob.size / 1024).toFixed(0)}KB`);
+                function stopAndDiscard() {
+                    if (recorder.state === 'recording') recorder.stop();
+                    recorderData.shouldSend = false;
+                }
 
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const base64Audio = reader.result.split(',')[1];
-
-                    // Send to backend - backend will broadcast to all other users in room
-                    if (socket && socket.connected && currentRoom) {
-                        socket.emit('audio_stream', {
-                            room: currentRoom,
-                            audio: base64Audio
-                        });
-                        console.log('📤 Sent sender audio to backend for translation broadcast');
+                recorder.ondataavailable = (event) => {
+                    if (event.data.size > 0 && translationEnabled) {
+                        recorderData.chunks.push(event.data);
                     }
                 };
-                reader.readAsDataURL(audioBlob);
 
-                // Restart for next chunk (continuous recording)
-                senderAudioChunks = [];
-                if (currentRoom && senderMediaRecorder) {
-                    // Restart recording for next 6-second chunk
-                    senderMediaRecorder.start();
-                    setTimeout(() => {
-                        if (senderMediaRecorder && senderMediaRecorder.state === 'recording') {
-                            senderMediaRecorder.stop();
-                        }
-                    }, 6000);
-                }
-            };
+                recorder.onstop = () => {
+                    // Stop VAD loop momentarily
+                    if (recorderData.vadLoop) cancelAnimationFrame(recorderData.vadLoop);
 
-            // Start recording in 6-second chunks
-            senderMediaRecorder.start();
-            isSenderRecording = true;
+                    if (translationEnabled && recorderData.shouldSend && recorderData.chunks.length > 0) {
+                        const audioBlob = new Blob(recorderData.chunks, { type: 'audio/webm' });
+                        logToServer('INFO', `VAD: Sending chunk ${user.uid} (${audioBlob.size} bytes)`);
 
-            setTimeout(() => {
-                if (senderMediaRecorder && senderMediaRecorder.state === 'recording') {
-                    senderMediaRecorder.stop();
-                }
-            }, 6000);
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            const base64Audio = reader.result.split(',')[1];
+                            if (socket && socket.connected && currentRoom) {
+                                socket.emit('translate_audio_chunk', {
+                                    room: currentRoom,
+                                    source_uid: user.uid,
+                                    audio: base64Audio,
+                                    target_lang: selectedLanguage
+                                });
+                            }
+                        };
+                        reader.readAsDataURL(audioBlob);
+                    }
 
-            console.log('🔴 Sender recording started: 6-second chunks, continuous');
+                    // Reset state
+                    recorderData.chunks = [];
+                    hasSpeechInChunk = false;
+                    silenceStartTime = null;
+                    chunkStartTime = Date.now();
+                    recorderData.shouldSend = false; // Default false until VAD speaks
+
+                    // Restart immediately
+                    if (receiverRecorders[user.uid] && receiverRecorders[user.uid].isRecording) {
+                        recorder.start();
+                        analyze(); // Restart VAD loop
+                    }
+                };
+
+                // Start
+                recorder.start();
+                analyze();
+
+            } catch (error) {
+                console.error(`❌ Failed to setup receiver capture for ${user.uid}:`, error);
+                logToServer('ERROR', `Failed to setup capture for ${user.uid}: ${error.message}`);
+            }
         }
 
-        // Stop sender-side audio recording
-        function stopSenderAudioRecording() {
-            if (senderMediaRecorder) {
-                if (senderMediaRecorder.state === 'recording') {
-                    senderMediaRecorder.stop();
+        // Stop capturing a specific remote user
+        function stopReceiverAudioRecording(uid) {
+            if (receiverRecorders[uid]) {
+                const data = receiverRecorders[uid];
+                data.isRecording = false;
+                if (data.recorder.state === 'recording') {
+                    data.recorder.stop();
                 }
-                senderMediaRecorder = null;
+                delete receiverRecorders[uid];
+                console.log(`🛑 Stopped receiver capture for User ${uid}`);
             }
-
-            if (senderAudioContext) {
-                senderAudioContext.close();
-                senderAudioContext = null;
-            }
-
-            senderGainNode = null;
-            senderCompressorNode = null;
-            isSenderRecording = false;
-            senderAudioChunks = [];
-
-            console.log('✅ Stopped sender audio recording');
         }
 
-        // ==================== PUSH-TO-TALK ====================
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !e.repeat && !spacebarPressed) {
-                if (!localTracks.audioTrack) {
-                    console.log('⚠️ Push-to-talk: No active call');
-                    return;
-                }
-
-                e.preventDefault();
-                spacebarPressed = true;
-                pushToTalkActive = true;
-
-                if (isMicMuted && localTracks.audioTrack) {
-                    localTracks.audioTrack.setEnabled(true);
-                    console.log('🎙️ Push-to-talk: ACTIVE (mic enabled)');
-                }
-
-                showPushToTalkIndicator(true);
-            }
-        });
-
-        document.addEventListener('keyup', (e) => {
-            if (e.code === 'Space' && spacebarPressed) {
-                if (!localTracks.audioTrack) {
-                    console.log('⚠️ Push-to-talk: No active call');
-                    spacebarPressed = false;
-                    pushToTalkActive = false;
-                    return;
-                }
-
-                e.preventDefault();
-                spacebarPressed = false;
-                pushToTalkActive = false;
-
-                if (isMicMuted && localTracks.audioTrack) {
-                    localTracks.audioTrack.setEnabled(false);
-                    console.log('🎙️ Push-to-talk: INACTIVE (mic disabled)');
-                }
-
-                showPushToTalkIndicator(false);
-            }
-        });
-
-        function showPushToTalkIndicator(active) {
-            let indicator = document.getElementById('ptt-indicator');
-            if (!indicator) {
-                indicator = document.createElement('div');
-                indicator.id = 'ptt-indicator';
-                indicator.style.cssText = `
-          position: fixed;
-          top: 100px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: rgba(67, 97, 238, 0.95);
-          color: white;
-          padding: 12px 24px;
-          border-radius: 25px;
-          font-weight: bold;
-          font-size: 14px;
-          z-index: 9999;
-          display: none;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        `;
-                indicator.innerHTML = '<i class="fas fa-microphone"></i> HOLD SPACEBAR TO TALK';
-                document.body.appendChild(indicator);
-            }
-
-            indicator.style.display = active ? 'block' : 'none';
-
-            const micBtn = document.getElementById('mic-btn');
-            if (micBtn) {
-                if (active) {
-                    micBtn.classList.add('active');
-                } else {
-                    micBtn.classList.remove('active');
-                }
-            }
+        // Stop ALL receiver recordings (e.g. when leaving call)
+        function stopAllReceiverRecordings() {
+            Object.keys(receiverRecorders).forEach(uid => {
+                stopReceiverAudioRecording(uid);
+            });
         }
 
         // ==================== AGORA WEBRTC ====================
@@ -1519,10 +1505,18 @@
                 }
 
                 if (mediaType === "audio") {
-                    // Do NOT play raw audio - only translated audio should be heard
-                    // Store track reference but don't play it
                     remoteUsers[user.uid] = user;
-                    console.log(`🔇 Muted raw audio from UID ${user.uid} (translation-only mode)`);
+
+                    // Logic: If translation is OFF, play raw audio. If ON, mute raw audio.
+                    if (!translationEnabled) {
+                        user.audioTrack.play();
+                        console.log(`🔊 Playing raw audio from ${user.uid} (Translation OFF)`);
+                    } else {
+                        console.log(`🔇 Muted raw audio from ${user.uid} (Translation ON)`);
+                    }
+
+                    // Setup receiver capture for this user (records only if translationEnabled)
+                    setupReceiverTranslationCapture(user);
                 }
             });
 
@@ -1578,8 +1572,8 @@
                 localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
                 localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack();
 
-                // Setup sender-side translation capture (separate from WebRTC track)
-                await setupSenderTranslationCapture();
+                // Setup receiver-side capture (initialize container)
+                receiverRecorders = {};
 
                 const box = document.createElement("div");
                 box.className = "video-item";
@@ -1595,13 +1589,13 @@
 
                 await client.publish([localTracks.audioTrack, localTracks.videoTrack]);
 
-                // Start with mic MUTED for push-to-talk mode
-                isMicMuted = true;
-                localTracks.audioTrack.setEnabled(false);
+                // Start with mic ENABLED (Continuous mode)
+                isMicMuted = false;
+                localTracks.audioTrack.setEnabled(true);
                 const micBtn = document.getElementById('mic-btn');
-                micBtn.classList.add('active');
-                micBtn.querySelector('span').textContent = 'Unmute (PTT)';
-                micBtn.querySelector('i').className = 'fas fa-microphone-slash';
+                micBtn.classList.remove('active');
+                micBtn.querySelector('span').textContent = 'Mute';
+                micBtn.querySelector('i').className = 'fas fa-microphone';
 
                 currentRoom = roomCode;
                 if (socket && socket.connected) {
@@ -1622,7 +1616,7 @@
                     }, 1000);
                 }
 
-                showNotification(`Meeting ${role === 'host' ? 'started' : 'joined'} - Hold SPACEBAR to talk`);
+                showNotification(`Meeting ${role === 'host' ? 'started' : 'joined'}`);
             } catch (err) {
                 console.error(err);
                 showNotification(`Failed to ${role === 'host' ? 'start' : 'join'} meeting: ${err.message}`, true);
@@ -1641,15 +1635,15 @@
 
             if (!isMicMuted) {
                 localTracks.audioTrack.setEnabled(true);
-                showNotification('Microphone always ON - Click to enable push-to-talk');
+                showNotification('Microphone enabled');
             } else {
                 localTracks.audioTrack.setEnabled(false);
-                showNotification('Push-to-talk mode - Hold SPACEBAR to talk');
+                showNotification('Microphone muted');
             }
 
             const micBtn = document.getElementById('mic-btn');
             micBtn.classList.toggle('active', isMicMuted);
-            micBtn.querySelector('span').textContent = isMicMuted ? 'Unmute (PTT)' : 'Mute';
+            micBtn.querySelector('span').textContent = isMicMuted ? 'Unmute' : 'Mute';
             micBtn.querySelector('i').className = isMicMuted ? 'fas fa-microphone-slash' : 'fas fa-microphone';
         }
 
@@ -1706,7 +1700,7 @@
         }
 
         async function leaveCall() {
-            stopAudioRecording();
+            stopAllReceiverRecordings();
             if (socket) socket.disconnect();
 
             for (let t of Object.values(localTracks)) {
