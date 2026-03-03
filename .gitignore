@@ -1,2 +1,19 @@
 __pycache__/
 *.pyc
+
+# Data and Metadata
+WLASL_v0.3.json
+missing.txt
+nslt_*.json
+wlasl_class_list.txt
+
+# Model Data and Checkpoints
+word_model_nslt100/data/
+word_model_nslt100/checkpoints/
+word_model_nslt100/training_history.json
+word_model_nslt300/data/
+word_model_nslt300/checkpoints/
+word_model_nslt300/training_history.json
+sign_alphabet_model/data/
+sign_alphabet_model/logs/
+sign_alphabet_model/evaluation/
