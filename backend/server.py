@@ -6,6 +6,7 @@ from datetime import datetime
 
 from audio_handler import AudioHandler
 from translation_pipeline import TranslationPipeline
+from sign_translation import SignTranslationHandler
 from config import *
 
 # Initialize Flask app
@@ -25,6 +26,7 @@ socketio = SocketIO(
 # Initialize handlers
 audio_handler = AudioHandler()
 translation_pipeline = TranslationPipeline()
+sign_translation_handler = SignTranslationHandler(translation_pipeline)
 
 # Store user states: {sid: {room, name, user_id, language, translation_enabled}}
 user_states = {}
@@ -244,6 +246,31 @@ def handle_translate_audio_chunk(data):
             
     except Exception as e:
         logger.error(f"Error in translate_audio_chunk: {e}")
+
+@socketio.on('sign_landmarks')
+def handle_sign_landmarks(data):
+    """
+    Handle incoming hand landmarks for sign language translation.
+    Data: { room: str, uid: int/str, landmarks: list[float] }
+    """
+    try:
+        room = data.get('room')
+        uid = data.get('uid')
+        landmarks = data.get('landmarks')
+        
+        if room and uid and landmarks:
+            sign_translation_handler.process_landmarks(room, uid, landmarks)
+    except Exception as e:
+        logger.error(f"Error processing sign landmarks: {str(e)}")
+
+def sign_language_background_task():
+    """Background task to finalize sign language words and sentences."""
+    while True:
+        socketio.sleep(0.5)
+        sign_translation_handler.check_pauses_and_broadcast(socketio, user_states)
+
+# Start background task
+socketio.start_background_task(sign_language_background_task)
 
 # ==================== Flask Routes ====================
 

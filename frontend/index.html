@@ -11,9 +11,10 @@
         href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&family=Inter:wght@300;400;500;600&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://download.agora.io/sdk/release/AgoraRTC_N.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.agora.io/sdk/release/AgoraRTC_N-4.19.0.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="js/sign-detection.js"></script>
 
     <style>
         * {
@@ -807,13 +808,13 @@
                 <p>Real-time speech translation in 100+ languages</p>
             </div>
 
-            <div class="dashboard-card disabled">
+            <div class="dashboard-card" onclick="startSignCall()">
                 <div class="dashboard-icon">
                     <i class="fas fa-hand-paper"></i>
                 </div>
                 <h4>Sign → Speech</h4>
                 <p>Convert sign language to spoken words</p>
-                <small>Coming Soon</small>
+                <small style="color:var(--neon-green)">New Feature</small>
             </div>
 
             <div class="dashboard-card disabled">
@@ -962,12 +963,13 @@
         // ==================== CONFIGURATION ====================
         const APP_ID = "6cb29407d3d3421aac28956a43545efb";
         const TOKEN = null;
-        const BACKEND_URL = "http://10.195.151.73:5000";
+        const BACKEND_URL = "http://192.168.0.104:5000";
 
         // ==================== GLOBAL STATE ====================
         let currentView = 'landing'; // 'landing', 'dashboard', 'call'
         let isLoggedIn = false;
         let autoEnableTranslation = false;
+        let isSignModeEnabled = false;
 
         // WebRTC variables
         let client;
@@ -1060,13 +1062,22 @@
 
         function startNormalCall() {
             autoEnableTranslation = false;
+            isSignModeEnabled = false;
             document.getElementById('setup-modal-title').textContent = 'Start Normal Video Call';
             document.getElementById('callSetupModal').classList.add('active');
         }
 
         function startTranslationCall() {
             autoEnableTranslation = true;
+            isSignModeEnabled = false;
             document.getElementById('setup-modal-title').textContent = 'Start Translation Call';
+            document.getElementById('callSetupModal').classList.add('active');
+        }
+
+        function startSignCall() {
+            autoEnableTranslation = true;
+            isSignModeEnabled = true;
+            document.getElementById('setup-modal-title').textContent = 'Start Sign Language Call';
             document.getElementById('callSetupModal').classList.add('active');
         }
 
@@ -1587,6 +1598,11 @@
                 box.querySelector('.video-placeholder').style.display = 'none';
                 box.querySelector('video').style.display = 'block';
 
+                currentRoom = roomCode;
+                if (isSignModeEnabled && window.initSignDetection) {
+                    window.initSignDetection(box.querySelector('video'), socket, currentRoom, localUid);
+                }
+
                 await client.publish([localTracks.audioTrack, localTracks.videoTrack]);
 
                 // Start with mic ENABLED (Continuous mode)
@@ -1597,7 +1613,6 @@
                 micBtn.querySelector('span').textContent = 'Mute';
                 micBtn.querySelector('i').className = 'fas fa-microphone';
 
-                currentRoom = roomCode;
                 if (socket && socket.connected) {
                     socket.emit('join_room', {
                         room: roomCode,
@@ -1717,6 +1732,12 @@
             activeSpeaker = null;
             currentRoom = "";
             translationEnabled = false;
+
+            if (isSignModeEnabled && window.stopSignDetection) {
+                window.stopSignDetection();
+            }
+            isSignModeEnabled = false;
+
             document.getElementById('translate-btn').classList.remove('enabled');
             document.getElementById('translation-status').classList.remove('visible');
             document.getElementById('translation-panel').classList.remove('visible');
