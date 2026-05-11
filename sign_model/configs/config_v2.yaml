@@ -1,0 +1,57 @@
+dataset:
+  source_dir: "../dataset_50_words"
+  min_samples: 30
+  max_samples: 80
+  exclude_classes: ["KNIGHT3"]
+  random_seed: 42
+
+preprocessing:
+  target_frames: 64
+  feature_dim: 225
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+
+augmentation:
+  enabled: true
+  augmentations_per_sample: 6
+  noise_std: 0.008
+  speed_rates: [0.75, 0.85, 1.15, 1.25]
+  temporal_jitter_frames: 8
+  mixup_alpha: 0.3
+  cutmix_frames: 32
+  wrist_rotation_max_deg: 20
+  wrist_scale_range: [0.85, 1.15]
+  body_scale_x_range: [0.88, 1.12]
+  body_scale_y_range: [0.88, 1.12]
+  enable_mixup: true
+  enable_cutmix: true
+  enable_wrist_transform: true
+  enable_body_scale: true
+
+model:
+  type: "transformer"
+  input_dim: 225
+  hidden_dim: 128
+  num_layers: 3
+  dropout: 0.45
+
+training:
+  batch_size: 32
+  epochs: 100
+  learning_rate: 0.0008
+  weight_decay: 0.0002
+  early_stopping_patience: 20
+  early_stopping_metric: "val_loss"
+  label_smoothing: 0.1
+  gradient_clip: 1.0
+
+paths:
+  landmarks_dir: "data/raw_landmarks"
+  processed_dir: "data/processed"
+  processed_filename: "dataset_v2.npz"
+  splits_dir: "data/splits"
+  checkpoints_dir: "models/v2/checkpoints"
+  final_model_dir: "models/v2/final"
+  label_map: "label_map.json"
+  version: "v2"

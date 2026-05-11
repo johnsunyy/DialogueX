@@ -905,12 +905,12 @@
 
             <div class="input-group">
                 <label>Email</label>
-                <input type="email" id="email" placeholder="demo@dialoguex.com" value="demo@dialoguex.com">
+                <input type="email" id="email" placeholder="Enter your email">
             </div>
 
             <div class="input-group">
                 <label>Password</label>
-                <input type="password" id="password" placeholder="demo123" value="demo123">
+                <input type="password" id="password" placeholder="Enter your password">
             </div>
 
             <button class="btn-primary" style="width: 100%; margin-top: 20px;" onclick="login()">
@@ -960,9 +960,11 @@
 
     <script>
         // ==================== CONFIGURATION ====================
-        const APP_ID = "6cb29407d3d3421aac28956a43545efb";
+        // TODO: Replace with your actual Agora App ID (from console.agora.io)
+        const APP_ID = "YOUR_AGORA_APP_ID";
         const TOKEN = null;
-        const BACKEND_URL = "http://10.195.151.73:5000";
+        // TODO: Replace with your backend server URL (e.g. http://localhost:5000)
+        const BACKEND_URL = "http://localhost:5000";
 
         // ==================== GLOBAL STATE ====================
         let currentView = 'landing'; // 'landing', 'dashboard', 'call'
@@ -1044,12 +1046,13 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
 
-            if (email === 'demo@dialoguex.com' && password === 'demo123') {
+            // TODO: Replace with real authentication (e.g. API call to your auth backend)
+            if (email && password) {
                 isLoggedIn = true;
                 closeLogin();
                 showView('dashboard');
             } else {
-                showNotification('Invalid credentials. Use demo@dialoguex.com / demo123', true);
+                showNotification('Please enter your email and password.', true);
             }
         }
 

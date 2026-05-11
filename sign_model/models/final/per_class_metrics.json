@@ -1,0 +1,485 @@
+{
+  "AGAIN": {
+    "precision": 0.5,
+    "recall": 0.1667,
+    "f1": 0.25,
+    "support": 6,
+    "status": "FAIL [XX]"
+  },
+  "AND": {
+    "precision": 0.8571,
+    "recall": 1.0,
+    "f1": 0.9231,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "BAD": {
+    "precision": 0.5,
+    "recall": 0.5,
+    "f1": 0.5,
+    "support": 12,
+    "status": "WARN [!!]"
+  },
+  "BECAUSE": {
+    "precision": 0.6667,
+    "recall": 0.6667,
+    "f1": 0.6667,
+    "support": 6,
+    "status": "WARN [!!]"
+  },
+  "BIG": {
+    "precision": 0.7778,
+    "recall": 1.0,
+    "f1": 0.875,
+    "support": 7,
+    "status": "PASS [OK]"
+  },
+  "BUT": {
+    "precision": 0.7143,
+    "recall": 0.8333,
+    "f1": 0.7692,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "CHILD": {
+    "precision": 1.0,
+    "recall": 0.6667,
+    "f1": 0.8,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "COFFEE": {
+    "precision": 0.8571,
+    "recall": 1.0,
+    "f1": 0.9231,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "COLD": {
+    "precision": 0.8,
+    "recall": 0.4444,
+    "f1": 0.5714,
+    "support": 9,
+    "status": "WARN [!!]"
+  },
+  "COME": {
+    "precision": 0.2857,
+    "recall": 0.2,
+    "f1": 0.2353,
+    "support": 10,
+    "status": "FAIL [XX]"
+  },
+  "COMMUNITY": {
+    "precision": 0.6,
+    "recall": 0.3333,
+    "f1": 0.4286,
+    "support": 9,
+    "status": "FAIL [XX]"
+  },
+  "DAY": {
+    "precision": 0.6,
+    "recall": 1.0,
+    "f1": 0.75,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "FAMILY": {
+    "precision": 0.875,
+    "recall": 0.875,
+    "f1": 0.875,
+    "support": 8,
+    "status": "PASS [OK]"
+  },
+  "FARM": {
+    "precision": 0.2,
+    "recall": 0.1,
+    "f1": 0.1333,
+    "support": 10,
+    "status": "FAIL [XX]"
+  },
+  "FAST": {
+    "precision": 0.4545,
+    "recall": 0.5,
+    "f1": 0.4762,
+    "support": 10,
+    "status": "FAIL [XX]"
+  },
+  "FATHER": {
+    "precision": 0.6667,
+    "recall": 0.6,
+    "f1": 0.6316,
+    "support": 10,
+    "status": "WARN [!!]"
+  },
+  "FRIEND": {
+    "precision": 0.7273,
+    "recall": 0.8,
+    "f1": 0.7619,
+    "support": 10,
+    "status": "PASS [OK]"
+  },
+  "GIVE": {
+    "precision": 0.6,
+    "recall": 0.6,
+    "f1": 0.6,
+    "support": 10,
+    "status": "WARN [!!]"
+  },
+  "GO": {
+    "precision": 0.4615,
+    "recall": 0.5,
+    "f1": 0.48,
+    "support": 12,
+    "status": "FAIL [XX]"
+  },
+  "GOOD": {
+    "precision": 0.3,
+    "recall": 0.25,
+    "f1": 0.2727,
+    "support": 12,
+    "status": "FAIL [XX]"
+  },
+  "HAVE": {
+    "precision": 0.75,
+    "recall": 1.0,
+    "f1": 0.8571,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "HELLO": {
+    "precision": 0.5714,
+    "recall": 0.6667,
+    "f1": 0.6154,
+    "support": 6,
+    "status": "WARN [!!]"
+  },
+  "HELP": {
+    "precision": 0.7143,
+    "recall": 0.4545,
+    "f1": 0.5556,
+    "support": 11,
+    "status": "WARN [!!]"
+  },
+  "HIS": {
+    "precision": 0.6667,
+    "recall": 0.6667,
+    "f1": 0.6667,
+    "support": 6,
+    "status": "WARN [!!]"
+  },
+  "HOME": {
+    "precision": 0.3571,
+    "recall": 0.5556,
+    "f1": 0.4348,
+    "support": 9,
+    "status": "FAIL [XX]"
+  },
+  "HOT": {
+    "precision": 0.2,
+    "recall": 0.1111,
+    "f1": 0.1429,
+    "support": 9,
+    "status": "FAIL [XX]"
+  },
+  "HOUSE": {
+    "precision": 0.4444,
+    "recall": 0.6667,
+    "f1": 0.5333,
+    "support": 6,
+    "status": "WARN [!!]"
+  },
+  "KNOW": {
+    "precision": 0.5,
+    "recall": 0.4,
+    "f1": 0.4444,
+    "support": 10,
+    "status": "FAIL [XX]"
+  },
+  "LATER": {
+    "precision": 0.4286,
+    "recall": 0.5,
+    "f1": 0.4615,
+    "support": 12,
+    "status": "FAIL [XX]"
+  },
+  "LIKE": {
+    "precision": 0.625,
+    "recall": 0.4167,
+    "f1": 0.5,
+    "support": 12,
+    "status": "WARN [!!]"
+  },
+  "MAKE": {
+    "precision": 0.625,
+    "recall": 0.5556,
+    "f1": 0.5882,
+    "support": 9,
+    "status": "WARN [!!]"
+  },
+  "ME": {
+    "precision": 0.6,
+    "recall": 0.375,
+    "f1": 0.4615,
+    "support": 8,
+    "status": "FAIL [XX]"
+  },
+  "MEDICINE": {
+    "precision": 0.6,
+    "recall": 0.75,
+    "f1": 0.6667,
+    "support": 8,
+    "status": "WARN [!!]"
+  },
+  "MORNING": {
+    "precision": 0.6,
+    "recall": 0.3333,
+    "f1": 0.4286,
+    "support": 9,
+    "status": "FAIL [XX]"
+  },
+  "MOTHER": {
+    "precision": 0.5455,
+    "recall": 0.5,
+    "f1": 0.5217,
+    "support": 12,
+    "status": "WARN [!!]"
+  },
+  "NEED": {
+    "precision": 1.0,
+    "recall": 0.6,
+    "f1": 0.75,
+    "support": 10,
+    "status": "PASS [OK]"
+  },
+  "NO": {
+    "precision": 0.4444,
+    "recall": 0.7273,
+    "f1": 0.5517,
+    "support": 11,
+    "status": "WARN [!!]"
+  },
+  "NOW": {
+    "precision": 0.6154,
+    "recall": 0.8889,
+    "f1": 0.7273,
+    "support": 9,
+    "status": "PASS [OK]"
+  },
+  "PEOPLE": {
+    "precision": 1.0,
+    "recall": 0.8333,
+    "f1": 0.9091,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "PLEASE": {
+    "precision": 0.7143,
+    "recall": 0.8333,
+    "f1": 0.7692,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "SCHOOL": {
+    "precision": 0.4545,
+    "recall": 0.4167,
+    "f1": 0.4348,
+    "support": 12,
+    "status": "FAIL [XX]"
+  },
+  "SEE": {
+    "precision": 1.0,
+    "recall": 0.6,
+    "f1": 0.75,
+    "support": 5,
+    "status": "PASS [OK]"
+  },
+  "SLOW": {
+    "precision": 0.7143,
+    "recall": 0.8333,
+    "f1": 0.7692,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "SMALL": {
+    "precision": 0.4615,
+    "recall": 0.6,
+    "f1": 0.5217,
+    "support": 10,
+    "status": "WARN [!!]"
+  },
+  "SORRY": {
+    "precision": 0.5,
+    "recall": 0.5556,
+    "f1": 0.5263,
+    "support": 9,
+    "status": "WARN [!!]"
+  },
+  "STARE": {
+    "precision": 0.4286,
+    "recall": 0.3,
+    "f1": 0.3529,
+    "support": 10,
+    "status": "FAIL [XX]"
+  },
+  "SWEAT": {
+    "precision": 1.0,
+    "recall": 0.5,
+    "f1": 0.6667,
+    "support": 6,
+    "status": "WARN [!!]"
+  },
+  "TAKE": {
+    "precision": 0.5714,
+    "recall": 0.3333,
+    "f1": 0.4211,
+    "support": 12,
+    "status": "FAIL [XX]"
+  },
+  "TEACHER": {
+    "precision": 0.7143,
+    "recall": 0.8333,
+    "f1": 0.7692,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "THANKYOU": {
+    "precision": 0.3333,
+    "recall": 0.5,
+    "f1": 0.4,
+    "support": 6,
+    "status": "FAIL [XX]"
+  },
+  "THINK": {
+    "precision": 0.4375,
+    "recall": 0.5833,
+    "f1": 0.5,
+    "support": 12,
+    "status": "WARN [!!]"
+  },
+  "TIME": {
+    "precision": 0.75,
+    "recall": 1.0,
+    "f1": 0.8571,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "TODAY": {
+    "precision": 0.3333,
+    "recall": 0.1429,
+    "f1": 0.2,
+    "support": 7,
+    "status": "FAIL [XX]"
+  },
+  "TOMORROW": {
+    "precision": 0.4667,
+    "recall": 0.875,
+    "f1": 0.6087,
+    "support": 8,
+    "status": "WARN [!!]"
+  },
+  "USE": {
+    "precision": 0.5714,
+    "recall": 0.6667,
+    "f1": 0.6154,
+    "support": 6,
+    "status": "WARN [!!]"
+  },
+  "WAIT": {
+    "precision": 0.8571,
+    "recall": 1.0,
+    "f1": 0.9231,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "WATER": {
+    "precision": 0.5333,
+    "recall": 0.6667,
+    "f1": 0.5926,
+    "support": 12,
+    "status": "WARN [!!]"
+  },
+  "WE": {
+    "precision": 0.7143,
+    "recall": 0.5556,
+    "f1": 0.625,
+    "support": 9,
+    "status": "WARN [!!]"
+  },
+  "WEEK": {
+    "precision": 1.0,
+    "recall": 0.6667,
+    "f1": 0.8,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "WHEN": {
+    "precision": 0.7143,
+    "recall": 0.8333,
+    "f1": 0.7692,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "WHERE": {
+    "precision": 0.6,
+    "recall": 0.5,
+    "f1": 0.5455,
+    "support": 6,
+    "status": "WARN [!!]"
+  },
+  "WHY": {
+    "precision": 0.75,
+    "recall": 0.4286,
+    "f1": 0.5455,
+    "support": 7,
+    "status": "WARN [!!]"
+  },
+  "WISH": {
+    "precision": 0.625,
+    "recall": 0.5556,
+    "f1": 0.5882,
+    "support": 9,
+    "status": "WARN [!!]"
+  },
+  "WITH": {
+    "precision": 0.8333,
+    "recall": 0.8333,
+    "f1": 0.8333,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "WITHOUT": {
+    "precision": 0.7143,
+    "recall": 0.8333,
+    "f1": 0.7692,
+    "support": 6,
+    "status": "PASS [OK]"
+  },
+  "WOOD": {
+    "precision": 0.7143,
+    "recall": 1.0,
+    "f1": 0.8333,
+    "support": 5,
+    "status": "PASS [OK]"
+  },
+  "WORK": {
+    "precision": 0.5,
+    "recall": 0.7,
+    "f1": 0.5833,
+    "support": 10,
+    "status": "WARN [!!]"
+  },
+  "YES": {
+    "precision": 0.3684,
+    "recall": 0.6364,
+    "f1": 0.4667,
+    "support": 11,
+    "status": "FAIL [XX]"
+  },
+  "YOU": {
+    "precision": 0.6667,
+    "recall": 0.5,
+    "f1": 0.5714,
+    "support": 8,
+    "status": "WARN [!!]"
+  }
+}

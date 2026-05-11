@@ -2,6 +2,8 @@ from flask import Flask, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_cors import CORS
 import logging
+import os
+import secrets
 from datetime import datetime
 
 from audio_handler import AudioHandler
@@ -11,7 +13,14 @@ from config import *
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'dialogue-x-secret-key'
+# Load SECRET_KEY from environment variable; never hardcode secrets in source.
+# Set the SECRET_KEY environment variable before running in production.
+_secret_key = os.environ.get('SECRET_KEY')
+if not _secret_key:
+    _secret_key = secrets.token_hex(32)
+    print("[WARNING] SECRET_KEY environment variable not set. "
+          "Using a temporary random key — sessions will not persist across restarts.")
+app.config['SECRET_KEY'] = _secret_key
 CORS(app)
 
 # Initialize SocketIO
@@ -81,6 +90,7 @@ def handle_join_room(data):
             'name': name,
             'user_id': user_id,
             'language': None,
+            'source_language': data.get('source_language', 'en-US'),
             'translation_enabled': False
         }
         
@@ -198,9 +208,10 @@ def handle_translate_audio_chunk(data):
         if not base64_audio or not target_lang:
             return
 
-        # Identify Source Name
+        # Identify Source Name and Source Language
         # We find the name of the user with source_uid in the same room
         source_name = f"User {source_uid}"
+        source_language = "en-US"
         
         # Optimize: In a real app, use a dict for ID lookups. Here we iterate (N is small).
         for sid, info in user_states.items():
@@ -208,6 +219,7 @@ def handle_translate_audio_chunk(data):
             # Note: user_id might be int or str, safest to compare as str
             if info['room'] == room and str(info.get('user_id')) == str(source_uid):
                 source_name = info['name']
+                source_language = info.get('source_language', 'en-US')
                 break
 
         # Process Audio (Decode Base64)
@@ -221,7 +233,7 @@ def handle_translate_audio_chunk(data):
         # Note: pipeline.process_audio detects source language automatically from audio
         # It needs 'source_name' just for logging/subtitle attribution
         try:
-            result = translation_pipeline.process_audio(audio_data, target_lang, source_name)
+            result = translation_pipeline.process_audio(audio_data, target_lang, source_name, source_language)
             
             if result:
                 # UNICAST response to Requester (only they hear this translation)
@@ -259,9 +271,40 @@ def handle_sign_landmarks(data):
         landmarks = data.get('landmarks')
         
         if room and uid and landmarks:
-            sign_translation_handler.process_landmarks(room, uid, landmarks)
+            sign_translation_handler.process_landmarks(room, uid, landmarks, socketio)
     except Exception as e:
         logger.error(f"Error processing sign landmarks: {str(e)}")
+
+@socketio.on('set_sign_mode')
+def handle_set_sign_mode(data):
+    """
+    Let the signer choose which recognition model to use.
+    Data: { room: str, uid: int/str, mode: 'alphabet' | 'word' | 'auto' }
+
+    Modes:
+      'alphabet' — always use the MLP (finger-spelling, letter by letter)
+      'word'     — always use the Transformer (whole-word gestures)
+      'auto'     — PME-based automatic switching (default)
+    """
+    try:
+        room = data.get('room')
+        uid  = data.get('uid')
+        mode = data.get('mode', 'auto')
+
+        if mode not in ('alphabet', 'word', 'auto'):
+            emit('error', {'message': f"Unknown sign mode '{mode}'. Use alphabet/word/auto."})
+            return
+
+        sign_translation_handler.set_user_mode(room, uid, mode)
+        logger.info(f"Sign mode for user {uid} in room {room} set to '{mode}'")
+
+        emit('sign_mode_updated', {
+            'mode': mode,
+            'uid':  uid,
+            'room': room
+        })
+    except Exception as e:
+        logger.error(f"Error in set_sign_mode: {str(e)}")
 
 def sign_language_background_task():
     """Background task to finalize sign language words and sentences."""

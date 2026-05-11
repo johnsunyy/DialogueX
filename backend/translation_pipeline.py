@@ -21,32 +21,35 @@ class TranslationPipeline:
         # Track latency for video sync
         self.last_latency_ms = 0
     
-    def speech_to_text(self, audio_data):
+    def speech_to_text(self, audio_data, source_language="en-US"):
         """
         Convert speech to text using Google Speech Recognition
         
         Args:
             audio_data (sr.AudioData): Audio data
+            source_language (str): BCP-47 language code (e.g. 'en-US', 'ml-IN')
             
         Returns:
             dict: {'text': str, 'language': str, 'latency_ms': int} or None
         """
         start_time = time.time()
         try:
-            # Use Google Speech Recognition with auto language detection
-            text = self.recognizer.recognize_google(audio_data)
+            # Use Google Speech Recognition with explicit language hint
+            text = self.recognizer.recognize_google(audio_data, language=source_language)
             
-            # Detect language
+            # Use the provided language base code or detect
             detected = self.translator.detect(text)
+            lang_code = detected.lang if detected and hasattr(detected, 'lang') else source_language.split('-')[0]
+            confidence = detected.confidence if detected and hasattr(detected, 'confidence') else 1.0
             
             latency_ms = int((time.time() - start_time) * 1000)
             
-            print(f"[STT] Transcribed: '{text}' (detected: {detected.lang}) - {latency_ms}ms")
+            print(f"[STT] Transcribed: '{text}' (detected: {lang_code}) - {latency_ms}ms")
             
             return {
                 'text': text,
-                'language': detected.lang,
-                'confidence': detected.confidence,
+                'language': lang_code,
+                'confidence': confidence,
                 'latency_ms': latency_ms
             }
             
@@ -57,16 +60,18 @@ class TranslationPipeline:
             self.recognizer.energy_threshold = int(original_threshold * 0.6)  # Lower by 40%
             
             try:
-                text = self.recognizer.recognize_google(audio_data)
+                text = self.recognizer.recognize_google(audio_data, language=source_language)
                 detected = self.translator.detect(text)
+                lang_code = detected.lang if detected and hasattr(detected, 'lang') else source_language.split('-')[0]
+                confidence = detected.confidence if detected and hasattr(detected, 'confidence') else 1.0
                 latency_ms = int((time.time() - start_time) * 1000)
                 
-                print(f"[STT] ✓ Retry successful: '{text}' (detected: {detected.lang}) - {latency_ms}ms")
+                print(f"[STT] ✓ Retry successful: '{text}' (detected: {lang_code}) - {latency_ms}ms")
                 
                 return {
                     'text': text,
-                    'language': detected.lang,
-                    'confidence': detected.confidence,
+                    'language': lang_code,
+                    'confidence': confidence,
                     'latency_ms': latency_ms
                 }
             except (sr.UnknownValueError, sr.RequestError):
@@ -163,7 +168,7 @@ class TranslationPipeline:
                 except:
                     pass  # Ignore cleanup errors
     
-    def process_audio(self, audio_data, target_lang, sender_name="Unknown"):
+    def process_audio(self, audio_data, target_lang, sender_name="Unknown", source_language="en-US"):
         """
         Complete pipeline: Audio → Transcribe → Translate → Synthesize
         Tracks total latency for video synchronization
@@ -172,6 +177,7 @@ class TranslationPipeline:
             audio_data (sr.AudioData): Audio data
             target_lang (str): Target language code
             sender_name (str): Name of the speaker
+            source_language (str): Speaker's language code for STT hint
             
         Returns:
             dict: {
@@ -185,7 +191,7 @@ class TranslationPipeline:
         
         try:
             # Step 1: Speech to Text
-            stt_result = self.speech_to_text(audio_data)
+            stt_result = self.speech_to_text(audio_data, source_language)
             if not stt_result:
                 return None
             

@@ -1,0 +1,27 @@
+{
+  "v1": {
+    "val_acc": 0.59091,
+    "val_loss": 1.84441,
+    "best_epoch": 35,
+    "train_size": 8013,
+    "dropout": 0.3,
+    "label_smoothing": 0.0,
+    "early_stop_metric": "val_acc",
+    "infer_ms": 1.022
+  },
+  "v2": {
+    "val_acc": 0.61189,
+    "val_loss": 2.30924,
+    "best_epoch": 19,
+    "train_size": 18697,
+    "dropout": 0.45,
+    "label_smoothing": 0.1,
+    "early_stop_metric": "val_loss",
+    "infer_ms": 6.643
+  },
+  "delta": {
+    "val_acc_pp": 2.098,
+    "val_loss": 0.46483,
+    "train_size": 10684
+  }
+}

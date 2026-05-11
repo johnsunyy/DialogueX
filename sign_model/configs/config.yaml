@@ -1,0 +1,42 @@
+dataset:
+  source_dir: "../dataset_50_words"    # relative to sign_model/
+  min_samples: 30
+  max_samples: 80
+  exclude_classes: ["KNIGHT3"]
+  random_seed: 42
+
+preprocessing:
+  target_frames: 64
+  feature_dim: 225
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+
+augmentation:
+  enabled: true
+  augmentations_per_sample: 2
+  noise_std: 0.01
+  speed_rates: [0.85, 1.15]
+  temporal_jitter_frames: 5
+
+model:
+  type: "transformer"       # "lstm" or "transformer"
+  input_dim: 225
+  hidden_dim: 128
+  num_layers: 3
+  dropout: 0.3
+
+training:
+  batch_size: 32
+  epochs: 80
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  early_stopping_patience: 15
+
+paths:
+  landmarks_dir: "data/raw_landmarks"
+  processed_dir: "data/processed"
+  splits_dir: "data/splits"
+  checkpoints_dir: "models/checkpoints"
+  final_model_dir: "models/final"
+  label_map: "label_map.json"

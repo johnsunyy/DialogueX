@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.agora.io/sdk/release/AgoraRTC_N-4.19.0.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
     <script src="js/sign-detection.js"></script>
 
     <style>
@@ -449,12 +449,27 @@
             right: 0;
             bottom: 0;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: white;
-            font-size: 24px;
-            background: linear-gradient(45deg, #4361ee, #3f37c9);
+            gap: 12px;
+            background: linear-gradient(160deg, #0f0f1a 0%, #1a1a2e 60%, #16213e 100%);
             z-index: 0;
+        }
+
+        .video-placeholder svg {
+            width: 72px;
+            height: 72px;
+            opacity: 0.35;
+            filter: drop-shadow(0 0 12px rgba(0, 212, 255, 0.25));
+        }
+
+        .video-placeholder .ph-name {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.35);
+            letter-spacing: 0.05em;
+            font-family: 'Inter', sans-serif;
         }
 
         .video-label {
@@ -530,6 +545,40 @@
             background: rgba(0, 255, 136, 0.2);
             border-color: var(--neon-green);
             color: var(--neon-green);
+        }
+
+        /* Realtime Prediction Overlay */
+        .realtime-prediction-overlay {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(10, 10, 10, 0.75);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 1.1rem;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: opacity 0.3s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .realtime-prediction-overlay.visible {
+            opacity: 1;
+        }
+
+        .realtime-prediction-overlay .conf {
+            font-size: 0.85rem;
+            color: var(--neon-green);
+            font-weight: 700;
         }
 
         /* Translation Panel */
@@ -751,6 +800,92 @@
                 transform: rotate(360deg);
             }
         }
+
+        /* ==================== SIGN MODE PICKER ==================== */
+        .sign-mode-panel {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-primary);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 20px 24px;
+            z-index: 300;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+            min-width: 260px;
+        }
+
+        .sign-mode-panel.visible {
+            display: flex;
+        }
+
+        .sign-mode-panel h4 {
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 4px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .sign-mode-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            cursor: pointer;
+            transition: var(--transition);
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 0.92rem;
+            font-weight: 500;
+        }
+
+        .sign-mode-option:hover {
+            border-color: var(--neon-blue);
+            background: rgba(0, 212, 255, 0.08);
+            color: var(--neon-blue);
+        }
+
+        .sign-mode-option.active-mode {
+            border-color: var(--neon-green);
+            background: rgba(0, 255, 136, 0.12);
+            color: var(--neon-green);
+        }
+
+        .sign-mode-option i {
+            font-size: 1.1rem;
+            width: 20px;
+            text-align: center;
+        }
+
+        .sign-mode-badge {
+            margin-left: auto;
+            font-size: 0.7rem;
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid var(--neon-green);
+            color: var(--neon-green);
+            border-radius: 20px;
+            padding: 2px 8px;
+            display: none;
+        }
+
+        .sign-mode-option.active-mode .sign-mode-badge {
+            display: inline-block;
+        }
+
+        .control-btn.sign-active {
+            background: rgba(0, 255, 136, 0.2);
+            border-color: var(--neon-green);
+            color: var(--neon-green);
+        }
     </style>
 </head>
 
@@ -805,7 +940,7 @@
                     <i class="fas fa-language"></i>
                 </div>
                 <h4>Live Translation Call</h4>
-                <p>Real-time speech translation in 100+ languages</p>
+                <p>Real-time speech translation</p>
             </div>
 
             <div class="dashboard-card" onclick="startSignCall()">
@@ -891,9 +1026,50 @@
                 <i class="fas fa-desktop"></i>
                 <span>Share Screen</span>
             </button>
+            <button class="control-btn" id="sign-mode-btn" onclick="toggleSignModePanel()" style="display:none;">
+                <i class="fas fa-hand-paper"></i>
+                <span id="sign-mode-btn-label">Sign: Auto</span>
+            </button>
             <button class="control-btn danger" onclick="leaveCall()">
                 <i class="fas fa-phone-slash"></i>
                 <span>Leave</span>
+            </button>
+        </div>
+
+        <!-- Sign Mode Picker Panel -->
+        <div class="sign-mode-panel" id="sign-mode-panel">
+            <h4><i class="fas fa-hand-paper" style="margin-right:6px;"></i>Sign Recognition Mode</h4>
+
+            <!-- Mode options — hidden when sign is disabled -->
+            <div id="sign-mode-options">
+                <div class="sign-mode-option" id="mode-opt-auto" onclick="setSignMode('auto')">
+                    <i class="fas fa-magic"></i>
+                    <span>Auto&nbsp;<small style="color:rgba(255,255,255,0.4);font-weight:400;">(PME
+                            switching)</small></span>
+                    <span class="sign-mode-badge">Active</span>
+                </div>
+                <div class="sign-mode-option" id="mode-opt-alphabet" onclick="setSignMode('alphabet')">
+                    <i class="fas fa-font"></i>
+                    <span>Alphabet&nbsp;<small style="color:rgba(255,255,255,0.4);font-weight:400;">(finger-spell
+                            letters)</small></span>
+                    <span class="sign-mode-badge">Active</span>
+                </div>
+                <div class="sign-mode-option" id="mode-opt-word" onclick="setSignMode('word')">
+                    <i class="fas fa-comment-dots"></i>
+                    <span>Word&nbsp;<small style="color:rgba(255,255,255,0.4);font-weight:400;">(whole-word
+                            gesture)</small></span>
+                    <span class="sign-mode-badge">Active</span>
+                </div>
+            </div>
+
+            <!-- Enable / Disable toggle buttons -->
+            <button id="disable-sign-btn" class="btn-danger" style="margin-top:10px;width:100%;"
+                onclick="disableSignDetection()">
+                <i class="fas fa-hand-paper"></i> Disable Sign Language
+            </button>
+            <button id="enable-sign-btn" class="btn-success hidden" style="margin-top:10px;width:100%;"
+                onclick="enableSignDetection()">
+                <i class="fas fa-hand-paper"></i> Enable Sign Language
             </button>
         </div>
     </div>
@@ -906,12 +1082,12 @@
 
             <div class="input-group">
                 <label>Email</label>
-                <input type="email" id="email" placeholder="demo@dialoguex.com" value="demo@dialoguex.com">
+                <input type="email" id="email" placeholder="Enter your email">
             </div>
 
             <div class="input-group">
                 <label>Password</label>
-                <input type="password" id="password" placeholder="demo123" value="demo123">
+                <input type="password" id="password" placeholder="Enter your password">
             </div>
 
             <button class="btn-primary" style="width: 100%; margin-top: 20px;" onclick="login()">
@@ -947,6 +1123,28 @@
                 <input type="text" id="user-name" placeholder="Enter your name" value="Participant">
             </div>
 
+            <div class="input-group">
+                <label for="speaking-language">I am speaking in (Language)</label>
+                <select id="speaking-language">
+                    <option value="en-US">English</option>
+                    <option value="hi-IN">Hindi (हिंदी)</option>
+                    <option value="ml-IN">Malayalam (മലയാളം)</option>
+                    <option value="es-ES">Spanish (Español)</option>
+                    <option value="fr-FR">French (Français)</option>
+                    <option value="de-DE">German (Deutsch)</option>
+                    <option value="ja-JP">Japanese (日本語)</option>
+                    <option value="ko-KR">Korean (한국어)</option>
+                    <option value="zh-CN">Chinese (中文)</option>
+                    <option value="ar-SA">Arabic (العربية)</option>
+                    <option value="pt-BR">Portuguese (Português)</option>
+                    <option value="ru-RU">Russian (Русский)</option>
+                    <option value="it-IT">Italian (Italiano)</option>
+                    <option value="ta-IN">Tamil (தமிழ்)</option>
+                    <option value="te-IN">Telugu (తెలుగు)</option>
+                    <option value="bn-IN">Bengali (বাংলা)</option>
+                </select>
+            </div>
+
             <button id="start-call-btn" class="btn-primary" style="width: 100%; margin-top: 20px;">
                 <i class="fas fa-video"></i> Start Meeting
             </button>
@@ -961,15 +1159,18 @@
 
     <script>
         // ==================== CONFIGURATION ====================
-        const APP_ID = "6cb29407d3d3421aac28956a43545efb";
+        // TODO: Replace with your actual Agora App ID (from console.agora.io)
+        const APP_ID = "YOUR_AGORA_APP_ID";
         const TOKEN = null;
-        const BACKEND_URL = "http://192.168.0.104:5000";
+        // TODO: Replace with your backend server URL (e.g. http://localhost:5000)
+        const BACKEND_URL = "http://localhost:5000";
 
         // ==================== GLOBAL STATE ====================
         let currentView = 'landing'; // 'landing', 'dashboard', 'call'
         let isLoggedIn = false;
         let autoEnableTranslation = false;
         let isSignModeEnabled = false;
+        let currentSignMode = 'auto'; // 'auto' | 'alphabet' | 'word'
 
         // WebRTC variables
         let client;
@@ -1046,12 +1247,13 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
 
-            if (email === 'demo@dialoguex.com' && password === 'demo123') {
+            // TODO: Replace with real authentication (e.g. API call to your auth backend)
+            if (email && password) {
                 isLoggedIn = true;
                 closeLogin();
                 showView('dashboard');
             } else {
-                showNotification('Invalid credentials. Use demo@dialoguex.com / demo123', true);
+                showNotification('Please enter your email and password.', true);
             }
         }
 
@@ -1137,22 +1339,36 @@
                 }
             });
 
-            socket.on('translated_audio', async (data) => {
+            socket.on('translated_audio', (data) => {
                 console.log("🔊 Received translated_audio event");
                 console.log("  - Audio data length:", data.audio ? data.audio.length : 'undefined');
                 console.log("  - Latency:", data.latency_ms + "ms");
                 console.log("  - Breakdown:", data.breakdown);
-                try {
-                    await playTranslatedAudio(data.audio);
-                    console.log("✅ Audio played successfully");
-                } catch (error) {
-                    console.error("❌ Error playing translated audio:", error);
-                }
+                enqueueTranslatedAudio(data.audio);
             });
 
             socket.on('error', (error) => {
                 logToServer('ERROR', "Socket error: " + JSON.stringify(error));
                 showNotification(error.message || "Connection error", true);
+            });
+
+            // Realtime Prediction Overlay logic
+            let overlayTimers = {};
+            socket.on('realtime_prediction', function (data) {
+                const overlay = document.getElementById(`overlay-${data.uid}`);
+                if (overlay) {
+                    overlay.querySelector('.pred-label').textContent = data.label;
+                    overlay.querySelector('.conf').textContent = `(${data.confidence}%)`;
+                    overlay.classList.add('visible');
+
+                    if (overlayTimers[data.uid]) {
+                        clearTimeout(overlayTimers[data.uid]);
+                    }
+
+                    overlayTimers[data.uid] = setTimeout(() => {
+                        overlay.classList.remove('visible');
+                    }, 2000);
+                }
             });
         }
 
@@ -1176,8 +1392,33 @@
             }, 5000);
         }
 
-        // Play translated audio
-        async function playTranslatedAudio(base64Audio) {
+        // ── Translated-audio playback queue ──────────────────────────────────
+        // Prevents overlapping audio when multiple VAD chunks are translated
+        // in quick succession (e.g. long sentences split by MAX_SPEECH_DURATION).
+        const translatedAudioQueue = [];
+        let isPlayingTranslatedAudio = false;
+        let currentTranslatedAudio = null; // track active Audio object
+
+        function enqueueTranslatedAudio(base64Audio) {
+            translatedAudioQueue.push(base64Audio);
+            console.log(`[AudioQueue] Queued chunk. Queue length: ${translatedAudioQueue.length}`);
+            if (!isPlayingTranslatedAudio) {
+                playNextInQueue();
+            }
+        }
+
+        function playNextInQueue() {
+            if (translatedAudioQueue.length === 0) {
+                isPlayingTranslatedAudio = false;
+                currentTranslatedAudio = null;
+                console.log('[AudioQueue] Queue empty, playback finished.');
+                return;
+            }
+
+            isPlayingTranslatedAudio = true;
+            const base64Audio = translatedAudioQueue.shift();
+            console.log(`[AudioQueue] Playing chunk. Remaining in queue: ${translatedAudioQueue.length}`);
+
             try {
                 const binaryString = atob(base64Audio);
                 const len = binaryString.length;
@@ -1189,15 +1430,40 @@
                 const blob = new Blob([bytes], { type: 'audio/mp3' });
                 const audioUrl = URL.createObjectURL(blob);
                 const audio = new Audio(audioUrl);
+                currentTranslatedAudio = audio;
 
                 audio.onended = () => {
                     URL.revokeObjectURL(audioUrl);
+                    console.log('[AudioQueue] Chunk finished, playing next.');
+                    playNextInQueue(); // chain to next chunk
                 };
 
-                await audio.play();
+                audio.onerror = (err) => {
+                    console.error('[AudioQueue] Audio error:', err);
+                    URL.revokeObjectURL(audioUrl);
+                    playNextInQueue(); // skip bad chunk, continue queue
+                };
+
+                audio.play().catch(err => {
+                    console.error('[AudioQueue] play() rejected:', err);
+                    playNextInQueue();
+                });
+
             } catch (error) {
-                console.error("Error playing audio:", error);
+                console.error('[AudioQueue] Error decoding audio chunk:', error);
+                playNextInQueue(); // skip and continue
             }
+        }
+
+        // Call this when leaving a call to stop any in-progress audio cleanly
+        function clearAudioQueue() {
+            translatedAudioQueue.length = 0;
+            if (currentTranslatedAudio) {
+                currentTranslatedAudio.pause();
+                currentTranslatedAudio = null;
+            }
+            isPlayingTranslatedAudio = false;
+            console.log('[AudioQueue] Queue cleared.');
         }
 
         // Toggle translation panel
@@ -1349,10 +1615,10 @@
                 let lastSpeakingTime = Date.now();
 
                 // Constants
-                const VOLUME_THRESHOLD = 15;      // Sensitivity (0-255)
-                const SILENCE_DURATION = 600;     // Wait 600ms of silence before sending
-                const MAX_SPEECH_DURATION = 8000; // Force send after 8s
-                const MAX_SILENCE_CHUNK = 3000;   // Reset silent chunks every 3s to save memory
+                const VOLUME_THRESHOLD = 15;       // Sensitivity (0-255)
+                const SILENCE_DURATION = 1500;     // Wait 1.5s of silence (natural sentence boundary)
+                const MAX_SPEECH_DURATION = 25000; // Force send after 25s (safe ceiling under Whisper's 30s limit)
+                const MAX_SILENCE_CHUNK = 5000;    // Reset silent chunks every 5s to save memory
 
                 function analyze() {
                     // Check if recorder still exists
@@ -1501,14 +1767,30 @@
                 await client.subscribe(user, mediaType);
 
                 if (mediaType === "video") {
-                    const box = document.createElement("div");
-                    box.className = "video-item";
-                    box.id = `user-${user.uid}`;
-                    box.innerHTML = `
-            <div class="video-placeholder">${user.uid}</div>
+                    // Reuse existing box if the remote user was already seen
+                    // (handles camera re-enable and screen-share return without duplicating the tile)
+                    let box = document.getElementById(`user-${user.uid}`);
+
+                    if (!box) {
+                        box = document.createElement("div");
+                        box.className = "video-item";
+                        box.id = `user-${user.uid}`;
+                        box.innerHTML = `
+            <div class="video-placeholder" id="ph-${user.uid}">
+                <svg viewBox="0 0 100 110" xmlns="http://www.w3.org/2000/svg" fill="none">
+                    <circle cx="50" cy="36" r="22" fill="rgba(255,255,255,0.18)"/>
+                    <ellipse cx="50" cy="95" rx="34" ry="24" fill="rgba(255,255,255,0.13)"/>
+                </svg>
+                <span class="ph-name">${user.uid}</span>
+            </div>
             <video autoplay playsinline></video>
-            <div class="video-label">${user.uid}</div>`;
-                    document.getElementById('videos').appendChild(box);
+            <div class="video-label">${user.uid}</div>
+            <div class="realtime-prediction-overlay" id="overlay-${user.uid}">
+                <i class="fas fa-magic"></i> <span class="pred-label"></span> <span class="conf"></span>
+            </div>`;
+                        document.getElementById('videos').appendChild(box);
+                    }
+
                     user.videoTrack.play(box.querySelector('video'));
                     box.querySelector('.video-placeholder').style.display = 'none';
                     box.querySelector('video').style.display = 'block';
@@ -1564,6 +1846,7 @@
         async function startCall() {
             const roomCode = document.getElementById('room-code').value.trim();
             userName = document.getElementById('user-name').value.trim() || "Participant";
+            const speakingLanguage = document.getElementById('speaking-language').value;
 
             if (!roomCode) {
                 showNotification("Please enter a meeting code", true);
@@ -1590,9 +1873,18 @@
                 box.className = "video-item";
                 box.id = `user-${localUid}`;
                 box.innerHTML = `
-          <div class="video-placeholder">${userName}</div>
+          <div class="video-placeholder" id="ph-${localUid}">
+              <svg viewBox="0 0 100 110" xmlns="http://www.w3.org/2000/svg" fill="none">
+                  <circle cx="50" cy="36" r="22" fill="rgba(255,255,255,0.18)"/>
+                  <ellipse cx="50" cy="95" rx="34" ry="24" fill="rgba(255,255,255,0.13)"/>
+              </svg>
+              <span class="ph-name">${userName}</span>
+          </div>
           <video autoplay playsinline muted></video>
-          <div class="video-label">${userName} (You)</div>`;
+          <div class="video-label">${userName} (You)</div>
+          <div class="realtime-prediction-overlay" id="overlay-${localUid}">
+              <i class="fas fa-magic"></i> <span class="pred-label"></span> <span class="conf"></span>
+          </div>`;
                 document.getElementById('videos').appendChild(box);
                 localTracks.videoTrack.play(box.querySelector('video'));
                 box.querySelector('.video-placeholder').style.display = 'none';
@@ -1601,6 +1893,10 @@
                 currentRoom = roomCode;
                 if (isSignModeEnabled && window.initSignDetection) {
                     window.initSignDetection(box.querySelector('video'), socket, currentRoom, localUid);
+                    // Show the sign mode button now that sign detection is active
+                    const signBtn = document.getElementById('sign-mode-btn');
+                    if (signBtn) signBtn.style.display = 'flex';
+                    _applySignModeUI(currentSignMode);
                 }
 
                 await client.publish([localTracks.audioTrack, localTracks.videoTrack]);
@@ -1617,7 +1913,8 @@
                     socket.emit('join_room', {
                         room: roomCode,
                         name: userName,
-                        user_id: localUid
+                        user_id: localUid,
+                        source_language: speakingLanguage
                     });
                 }
 
@@ -1715,6 +2012,7 @@
         }
 
         async function leaveCall() {
+            clearAudioQueue();        // stop any queued translated audio
             stopAllReceiverRecordings();
             if (socket) socket.disconnect();
 
@@ -1737,6 +2035,14 @@
                 window.stopSignDetection();
             }
             isSignModeEnabled = false;
+            currentSignMode = 'auto';
+            const signBtn = document.getElementById('sign-mode-btn');
+            if (signBtn) signBtn.style.display = 'none';
+            document.getElementById('sign-mode-panel').classList.remove('visible');
+            // Reset enable/disable button state for next call
+            document.getElementById('sign-mode-options').classList.remove('hidden');
+            document.getElementById('disable-sign-btn').classList.remove('hidden');
+            document.getElementById('enable-sign-btn').classList.add('hidden');
 
             document.getElementById('translate-btn').classList.remove('enabled');
             document.getElementById('translation-status').classList.remove('visible');
@@ -1758,8 +2064,107 @@
             }, 3000);
         }
 
+        // ==================== SIGN MODE CONTROLS ====================
+
+        function toggleSignModePanel() {
+            const panel = document.getElementById('sign-mode-panel');
+            panel.classList.toggle('visible');
+        }
+
+        function setSignMode(mode) {
+            if (!socket || !socket.connected) {
+                showNotification('Not connected to backend', true);
+                return;
+            }
+            socket.emit('set_sign_mode', {
+                room: currentRoom,
+                uid: localUid,
+                mode: mode
+            });
+            // Optimistically apply UI (confirmed by sign_mode_updated)
+            _applySignModeUI(mode);
+            document.getElementById('sign-mode-panel').classList.remove('visible');
+        }
+
+        function _applySignModeUI(mode) {
+            currentSignMode = mode;
+            const labels = { auto: 'Sign: Auto', alphabet: 'Sign: Spell', word: 'Sign: Word' };
+            const btn = document.getElementById('sign-mode-btn');
+            if (btn) {
+                btn.querySelector('#sign-mode-btn-label').textContent = labels[mode] || 'Sign';
+                btn.className = 'control-btn' + (mode !== 'auto' ? ' sign-active' : '');
+            }
+            ['auto', 'alphabet', 'word'].forEach(m => {
+                const el = document.getElementById('mode-opt-' + m);
+                if (el) el.classList.toggle('active-mode', m === mode);
+            });
+        }
+
+        // ── Enable / Disable Sign Detection (in-call toggle) ─────────────────
+
+        function disableSignDetection() {
+            if (window.stopSignDetection) window.stopSignDetection();
+            isSignModeEnabled = false;
+
+            // Update controls bar button
+            const signBtn = document.getElementById('sign-mode-btn');
+            if (signBtn) {
+                signBtn.querySelector('#sign-mode-btn-label').textContent = 'Sign: Off';
+                signBtn.className = 'control-btn';
+            }
+
+            // Swap panel buttons; hide mode options
+            document.getElementById('sign-mode-options').classList.add('hidden');
+            document.getElementById('disable-sign-btn').classList.add('hidden');
+            document.getElementById('enable-sign-btn').classList.remove('hidden');
+
+            // Close the panel
+            document.getElementById('sign-mode-panel').classList.remove('visible');
+            showNotification('Sign language detection disabled');
+        }
+
+        function enableSignDetection() {
+            const localVideoBox = document.getElementById(`user-${localUid}`);
+            if (!localVideoBox) {
+                showNotification('Cannot find local video — rejoin the call', true);
+                return;
+            }
+            const videoEl = localVideoBox.querySelector('video');
+            if (!videoEl) {
+                showNotification('No local video element found', true);
+                return;
+            }
+
+            if (window.initSignDetection) {
+                window.initSignDetection(videoEl, socket, currentRoom, localUid);
+            }
+            isSignModeEnabled = true;
+
+            // Restore controls bar button label
+            _applySignModeUI(currentSignMode);
+
+            // Swap panel buttons; show mode options
+            document.getElementById('sign-mode-options').classList.remove('hidden');
+            document.getElementById('enable-sign-btn').classList.add('hidden');
+            document.getElementById('disable-sign-btn').classList.remove('hidden');
+
+            document.getElementById('sign-mode-panel').classList.remove('visible');
+            showNotification('Sign language detection enabled');
+        }
+
+        // Confirm from backend
+        function _registerSignModeListener() {
+            if (!socket) return;
+            socket.on('sign_mode_updated', (data) => {
+                console.log('[SignMode] Backend confirmed mode:', data.mode);
+                showNotification('Sign mode: ' + data.mode.charAt(0).toUpperCase() + data.mode.slice(1));
+            });
+        }
+
         // Initialize socket on load
         initSocket();
+        // Register sign mode listener after socket is initialized
+        setTimeout(_registerSignModeListener, 500);
 
         window.addEventListener('beforeunload', () => {
             if (localTracks.audioTrack || localTracks.videoTrack) leaveCall();

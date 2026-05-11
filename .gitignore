@@ -1,13 +1,22 @@
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
-# Data and Metadata
+# ── Environment / Secrets ─────────────────────────────────────
+# Never commit .env files — they contain API keys and passwords.
+# Use .env.example as a safe template instead.
+.env
+.env.*
+!.env.example
+
+# ── Data and Metadata ─────────────────────────────────────────
 WLASL_v0.3.json
 missing.txt
 nslt_*.json
 wlasl_class_list.txt
 
-# Model Data and Checkpoints
+# ── Model Data and Checkpoints ────────────────────────────────
 word_model_nslt100/data/
 word_model_nslt100/checkpoints/
 word_model_nslt100/training_history.json
@@ -17,3 +26,27 @@ word_model_nslt300/training_history.json
 sign_alphabet_model/data/
 sign_alphabet_model/logs/
 sign_alphabet_model/evaluation/
+sign_model/data/
+
+# Large model binary files (re-generate locally via training scripts)
+*.pt
+*.pth
+*.pkl
+*.h5
+*.keras
+
+# ── Dataset directories (large, not for git) ──────────────────
+dataset_50_words/
+
+# ── OS / IDE junk ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# ── Logs and temp files ───────────────────────────────────────
+*.log
+tmp/
+temp/
