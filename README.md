@@ -1,5 +1,5 @@
 # DIALOGUE-X  
-### AI-Powered Multilingual Communication Platform with Real-Time Translation & Sign Language Recognition
+### AI-Powered Multilingual Speech and Sign Language Translation Platform
 
 ---
 
