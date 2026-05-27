@@ -220,7 +220,7 @@ This project is licensed under the MIT License.
 
 ## Contributors
 
-- Sunny John
+- John Sunny
 - Dialogue-X Development Team
 
 ---
